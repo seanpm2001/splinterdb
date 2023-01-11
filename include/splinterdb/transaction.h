@@ -81,8 +81,7 @@ typedef struct tictoc_transaction {
    tictoc_rw_entry           **write_set;
    uint64                      read_cnt;
    uint64                      write_cnt;
-   uint64                      commit_rts;
-   uint64                      commit_wts;
+   uint64                      commit_tid;
    transaction_isolation_level isol_level;
 } tictoc_transaction;
 

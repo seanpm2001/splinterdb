@@ -44,15 +44,15 @@ merge_tictoc_tuple(const data_config *cfg,
       return 0;
    }
 
-   if (is_merge_accumulator_rts_update(new_message)) {
-      tictoc_tuple_header *new_tuple = merge_accumulator_data(new_message);
-      timestamp            new_rts   = new_tuple->ts_set.rts;
-      merge_accumulator_copy_message(new_message, old_message);
-      new_tuple = (tictoc_tuple_header *)merge_accumulator_data(new_message);
-      new_tuple->ts_set.rts = new_rts;
+   // if (is_merge_accumulator_rts_update(new_message)) {
+   //    tictoc_tuple_header *new_tuple = merge_accumulator_data(new_message);
+   //    timestamp            new_rts   = new_tuple->ts_set.rts;
+   //    merge_accumulator_copy_message(new_message, old_message);
+   //    new_tuple = (tictoc_tuple_header *)merge_accumulator_data(new_message);
+   //    new_tuple->ts_set.rts = new_rts;
 
-      return 0;
-   }
+   //    return 0;
+   // }
 
    message old_value_message = get_app_value_from_message(old_message);
    message new_value_message =

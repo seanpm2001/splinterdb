@@ -2,10 +2,10 @@
 
 #include "data_internal.h"
 
-tictoc_timestamp_set
+tictoc_timestamp
 get_ts_from_tictoc_rw_entry(tictoc_rw_entry *entry)
 {
-   tictoc_timestamp_set ts;
+   tictoc_timestamp ts;
    memcpy(&ts, writable_buffer_data(&entry->tuple), sizeof(ts));
    return ts;
 }
@@ -133,8 +133,7 @@ tictoc_transaction_init(tictoc_transaction         *tt_txn,
    tt_txn->write_set          = &tt_txn->read_write_set[read_set_size];
    tt_txn->read_cnt           = 0;
    tt_txn->write_cnt          = 0;
-   tt_txn->commit_rts         = 0;
-   tt_txn->commit_wts         = 0;
+   tt_txn->commit_tid         = 0;
    tt_txn->isol_level         = isol_level;
 }
 
