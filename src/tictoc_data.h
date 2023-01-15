@@ -11,7 +11,7 @@ typedef uint64 tictoc_timestamp;
 
 typedef struct ONDISK tictoc_tuple_header {
    tictoc_timestamp ts;
-   char                 value[]; // value provided by application
+   char             value[]; // value provided by application
 } tictoc_tuple_header;
 
 tictoc_timestamp
