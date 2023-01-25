@@ -1,4 +1,7 @@
 #include "splinterdb/transaction.h"
+#include "platform.h"
+#include "platform_inline.h"
+#include "tictoc_data.h"
 #include "transaction_internal.h"
 #include "splinterdb_internal.h"
 #include "platform_linux/platform.h"
@@ -39,6 +42,44 @@ tictoc_read(transactional_splinterdb *txn_kvsb,
             slice                     user_key,
             splinterdb_lookup_result *result)
 {
+
+   key ukey = key_create_from_slice(user_key);
+   for (uint64 i = 0; i < tt_txn->write_cnt; ++i) {
+      tictoc_rw_entry *w = tictoc_get_write_set_entry(tt_txn, i);
+      platform_assert(!tictoc_rw_entry_is_invalid(w));
+
+      if (data_key_compare(
+             txn_kvsb->tcfg->kvsb_cfg.data_cfg,
+             ukey,
+             key_create_from_slice(writable_buffer_to_slice(&w->key)))
+          == 0)
+      {
+         tictoc_tuple_header *tuple = writable_buffer_data(&w->tuple);
+         uint64               app_value_size =
+            writable_buffer_length(&w->tuple) - sizeof(tictoc_tuple_header);
+         _splinterdb_lookup_result *_result =
+            (_splinterdb_lookup_result *)result;
+         merge_accumulator_resize(&_result->value, app_value_size);
+         memcpy(merge_accumulator_data(&_result->value),
+                tuple->value,
+                app_value_size);
+
+         tictoc_rw_entry *r = tictoc_get_new_read_set_entry(tt_txn);
+         platform_assert(!tictoc_rw_entry_is_invalid(r));
+         writable_buffer_init_from_slice(
+            &r->tuple, 0, writable_buffer_to_slice(&w->tuple));
+         tictoc_rw_entry_set_point_key(
+            r, user_key, txn_kvsb->tcfg->kvsb_cfg.data_cfg);
+         // tuple = writable_buffer_data(&r->tuple);
+         get_ts_from_splinterdb(
+            txn_kvsb->kvsb,
+            user_key,
+            (tictoc_timestamp *)writable_buffer_data(&r->tuple));
+
+         return 0;
+      }
+   }
+
    int rc = splinterdb_lookup(txn_kvsb->kvsb, user_key, result);
 
    if (splinterdb_lookup_found(result)) {
@@ -93,7 +134,7 @@ tictoc_validation(transactional_splinterdb *txn_kvsb,
          return FALSE;
       }
 
-      tt_txn->commit_tid = MAX(tt_txn->commit_tid, record_tid);
+      tt_txn->commit_tid = MAX(tt_txn->commit_tid, record_tid + 1);
    }
 
    for (uint64 i = 0; i < tt_txn->write_cnt; ++i) {
@@ -101,7 +142,7 @@ tictoc_validation(transactional_splinterdb *txn_kvsb,
       slice            wkey = writable_buffer_to_slice(&w->key);
       tictoc_timestamp record_tid;
       get_ts_from_splinterdb(txn_kvsb->kvsb, wkey, &record_tid);
-      tt_txn->commit_tid = MAX(tt_txn->commit_tid, record_tid);
+      tt_txn->commit_tid = MAX(tt_txn->commit_tid, record_tid + 1);
    }
 
    return TRUE;
