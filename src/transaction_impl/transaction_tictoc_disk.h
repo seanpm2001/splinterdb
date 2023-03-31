@@ -503,6 +503,9 @@ transactional_splinterdb_lookup(transactional_splinterdb *txn_kvsb,
    do {
       get_global_timestamps(txn_kvsb, entry, &v1.wts, &v1.rts);
       rc = splinterdb_lookup(txn_kvsb->kvsb, user_key, result);
+      if (!splinterdb_lookup_found(result)) {
+         return rc;
+      }
       get_global_timestamps(txn_kvsb, entry, &v2.wts, &v2.rts);
    } while (memcmp(&v1, &v2, sizeof(v1)) != 0
             || lock_table_get_entry_lock_state(txn_kvsb->lock_tbl, entry)
@@ -511,14 +514,12 @@ transactional_splinterdb_lookup(transactional_splinterdb *txn_kvsb,
    entry->wts = v1.wts;
    entry->rts = v1.rts;
 
-   if (splinterdb_lookup_found(result)) {
-      tuple_header *tuple =
-         (tuple_header *)merge_accumulator_data(&_result->value);
-      const size_t value_len =
-         merge_accumulator_length(&_result->value) - sizeof(tuple_header);
-      memmove(merge_accumulator_data(&_result->value), tuple->value, value_len);
-      merge_accumulator_resize(&_result->value, value_len);
-   }
+   tuple_header *tuple =
+      (tuple_header *)merge_accumulator_data(&_result->value);
+   const size_t value_len =
+      merge_accumulator_length(&_result->value) - sizeof(tuple_header);
+   memmove(merge_accumulator_data(&_result->value), tuple->value, value_len);
+   merge_accumulator_resize(&_result->value, value_len);
 
    return rc;
 }
