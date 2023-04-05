@@ -14,7 +14,7 @@
 #include "splinterdb/splinterdb.h"
 #include "splinterdb/transaction.h"
 
-#define DB_FILE_NAME    "transactional_splinterdb_intro_db"
+#define DB_FILE_NAME    "/dev/nvme1n1"
 #define DB_FILE_SIZE_MB 1024 // Size of SplinterDB device; Fixed when created
 #define CACHE_SIZE_MB   64   // Size of cache; can be changed across boots
 
