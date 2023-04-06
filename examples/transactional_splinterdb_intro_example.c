@@ -93,9 +93,9 @@ main()
 
    memset(fruit, 0, sizeof(fruit));
    memcpy(fruit, "Orange", strlen("Orange"));
-   key   = slice_create(USER_MAX_KEY_SIZE, fruit);
-   rc    = transactional_splinterdb_lookup(spl_handle, &txn, key, &result);
-   rc    = splinterdb_lookup_result_value(&result, &value);
+   key = slice_create(USER_MAX_KEY_SIZE, fruit);
+   rc  = transactional_splinterdb_lookup(spl_handle, &txn, key, &result);
+   rc  = splinterdb_lookup_result_value(&result, &value);
    if (!rc) {
       printf("Found key: '%s', value: '%.*s'\n",
              fruit,
@@ -106,9 +106,9 @@ main()
    // Handling non-existent keys
    memset(fruit, 0, sizeof(fruit));
    memcpy(fruit, "Banana", strlen("Banana"));
-   key   = slice_create(USER_MAX_KEY_SIZE, fruit);
-   rc    = transactional_splinterdb_lookup(spl_handle, &txn, key, &result);
-   rc    = splinterdb_lookup_result_value(&result, &value);
+   key = slice_create(USER_MAX_KEY_SIZE, fruit);
+   rc  = transactional_splinterdb_lookup(spl_handle, &txn, key, &result);
+   rc  = splinterdb_lookup_result_value(&result, &value);
    if (rc) {
       printf("Key: '%s' not found. (rc=%d)\n", fruit, rc);
    }

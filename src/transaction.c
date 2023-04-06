@@ -4,9 +4,17 @@
 #   include "transaction_impl/transaction_tictoc_disk.h"
 #else
 #   if EXPERIMENTAL_MODE_ATOMIC_WORD
-#      include "transaction_impl/transaction_fantasticc_nolock.h"
+#      if EXPERIMENTAL_MODE_KEEP_ALL_KEYS
+#         include "transaction_impl/transaction_tictoc_cache_nolock.h"
+#      else
+#         include "transaction_impl/transaction_fantasticc_nolock.h"
+#      endif
 #   else
-#      include "transaction_impl/transaction_fantasticc.h"
+#      if EXPERIMENTAL_MODE_KEEP_ALL_KEYS
+#         include "transaction_impl/transaction_tictoc_cache.h"
+#      else
+#         include "transaction_impl/transaction_fantasticc.h"
+#      endif
 #   endif
 #endif
 
