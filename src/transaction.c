@@ -330,6 +330,11 @@ transactional_splinterdb_insert(transactional_splinterdb *txn_kvsb,
                                 slice                     user_key,
                                 slice                     value)
 {
+   // Call non-transactional insertion for YCSB loading..
+   if (txn == NULL) {
+      return splinterdb_insert(txn_kvsb->kvsb, user_key, value);
+   }
+
    transaction_internal *txn_internal = txn->internal;
    platform_assert(txn_internal != NULL);
 
