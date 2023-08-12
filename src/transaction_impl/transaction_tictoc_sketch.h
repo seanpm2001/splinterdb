@@ -112,8 +112,14 @@ sketch_get_timestamp_set(ValueType current_value, ValueType *new_value)
    timestamp_set_check_invariant(new_ts);
 }
 
+static inline uint8
+get_thread_id()
+{
+   return platform_get_tid() - 1;
+}
+
 typedef struct rw_entry {
-   slice          key;
+   char          *key;
    message        msg; // value + op
    txn_timestamp  wts;
    txn_timestamp  rts;
@@ -138,20 +144,33 @@ rw_entry_iceberg_insert(transactional_splinterdb *txn_kvsb, rw_entry *entry)
       return FALSE;
    }
 
-   KeyType key_ht = (KeyType)slice_data(entry->key);
+   char *current_key = entry->key;
    // increase refcount for key
    timestamp_set ts = {0};
    entry->tuple_ts  = &ts;
    // if there is no item in the cache, it inserts a new item, read a
    // value from the sketch, and set the bigger one between that and
    // the given value. As a result, it gets the timestamp greater than
-   // or equals to 0.
-   bool is_new_item        = iceberg_insert_and_get(txn_kvsb->tscache,
-                                             key_ht,
-                                             (ValueType **)&entry->tuple_ts,
-                                             platform_get_tid() - 1);
-   entry->need_to_keep_key = entry->need_to_keep_key || is_new_item;
-   return is_new_item;
+   // or equals to 0. Return true if the item is inserted, false if
+   // the item is already.
+   bool is_item_new =
+      iceberg_insert_and_get_key_value(txn_kvsb->tscache,
+                                       (KeyType *)&entry->key,
+                                       (ValueType **)&entry->tuple_ts,
+                                       get_thread_id());
+   if (!is_item_new) {
+      // free the current entry->key and replace the key to the one in
+      // the cache.
+      if (entry->key != current_key) {
+         // platform_default_log("[Thread %d] current_key: %p (%s), entry->key:
+         // %p (%s)\n", get_thread_id(), current_key, current_key, entry->key,
+         // entry->key); platform_default_log("[Thread %d] freeing current_key:
+         // %p (%s)\n", get_thread_id(), current_key, current_key);
+         platform_free_from_heap(0, current_key);
+      }
+   }
+   entry->need_to_keep_key = TRUE;
+   return is_item_new;
 }
 
 static inline void
@@ -163,16 +182,12 @@ rw_entry_iceberg_remove(transactional_splinterdb *txn_kvsb, rw_entry *entry)
 
    entry->tuple_ts = NULL;
 
-   KeyType   key_ht   = (KeyType)slice_data(entry->key);
-   ValueType value_ht = {0};
-   if (iceberg_get_and_remove(
-          txn_kvsb->tscache, &key_ht, &value_ht, platform_get_tid() - 1))
-   {
-      if (slice_data(entry->key) != key_ht) {
-         platform_free_from_heap(0, key_ht);
-      } else {
-         entry->need_to_keep_key = 0;
-      }
+   if (iceberg_remove(txn_kvsb->tscache, entry->key, get_thread_id())) {
+      // The entry is deleted.
+      entry->need_to_keep_key = FALSE;
+      // platform_default_log("[Thread %d] removed entry->key: %p (%s), key_ht:
+      // %p (%s)\n",
+      //  get_thread_id(), entry->key, entry->key, key_ht, key_ht);
    }
 }
 
@@ -182,16 +197,23 @@ rw_entry_create()
    rw_entry *new_entry;
    new_entry = TYPED_ZALLOC(0, new_entry);
    platform_assert(new_entry != NULL);
-   new_entry->tuple_ts = NULL;
    return new_entry;
+}
+
+static inline void
+rw_entry_init(rw_entry *entry)
+{
+   memset(entry, 0, sizeof(*entry));
 }
 
 static inline void
 rw_entry_deinit(rw_entry *entry)
 {
-   bool can_key_free = !slice_is_null(entry->key) && !entry->need_to_keep_key;
-   if (can_key_free) {
-      platform_free_from_heap(0, (void *)slice_data(entry->key));
+   platform_assert(entry->key, "entry->key is NULL\n");
+   if (!entry->need_to_keep_key) {
+      // platform_default_log("[Thread %d] freeing entry->key: %p (%s) at the
+      // end of txn\n", get_thread_id(), entry->key, entry->key);
+      platform_free_from_heap(0, entry->key);
    }
 
    if (!message_is_null(entry->msg)) {
@@ -202,10 +224,26 @@ rw_entry_deinit(rw_entry *entry)
 static inline void
 rw_entry_set_key(rw_entry *e, slice key, const data_config *cfg)
 {
+   platform_assert(!e->key, "key is allocated already\n");
+   e->key = TYPED_ARRAY_ZALLOC(0, e->key, KEY_SIZE);
+   memcpy(e->key, slice_data(key), slice_length(key));
+   // platform_default_log("[Thread %d] allocating entry->key: %p (%s)\n",
+   // get_thread_id(), e->key, e->key);
+}
+
+// This function might be used to copy memory buffer for the current
+// key. In terms of key managament, there is one shared memory buffer
+// for each key. So, this function could be used to copy the memory
+// temporarily.
+static inline void
+rw_entry_own_key_buffer(rw_entry *e, const data_config *cfg)
+{
    char *key_buf;
    key_buf = TYPED_ARRAY_ZALLOC(0, key_buf, KEY_SIZE);
-   memcpy(key_buf, slice_data(key), slice_length(key));
-   e->key = slice_create(KEY_SIZE, key_buf);
+   memcpy(key_buf, e->key, KEY_SIZE);
+   e->key = key_buf;
+   // platform_default_log("[Thread %d] allocating entry->key: %p (%s)\n",
+   // get_thread_id(), e->key, e->key);
 }
 
 /*
@@ -251,7 +289,7 @@ rw_entry_get(transactional_splinterdb *txn_kvsb,
    for (int i = 0; i < txn->num_rw_entries; ++i) {
       entry = txn->rw_entries[i];
 
-      if (data_key_compare(cfg, ukey, key_create_from_slice(entry->key)) == 0) {
+      if (data_key_compare(cfg, ukey, key_create(KEY_SIZE, entry->key)) == 0) {
          need_to_create_new_entry = FALSE;
          break;
       }
@@ -275,8 +313,8 @@ rw_entry_key_compare(const void *elem1, const void *elem2, void *args)
    rw_entry *e1 = *((rw_entry **)elem1);
    rw_entry *e2 = *((rw_entry **)elem2);
 
-   key akey = key_create_from_slice(e1->key);
-   key bkey = key_create_from_slice(e2->key);
+   key akey = key_create(KEY_SIZE, e1->key);
+   key bkey = key_create(KEY_SIZE, e2->key);
 
    return data_key_compare(cfg, akey, bkey);
 }
@@ -315,7 +353,7 @@ transactional_splinterdb_config_init(
           kvsb_cfg,
           sizeof(txn_splinterdb_cfg->kvsb_cfg));
 
-   txn_splinterdb_cfg->tscache_log_slots = 29;
+   txn_splinterdb_cfg->tscache_log_slots = 20;
 
    // TODO things like filename, logfile, or data_cfg would need a
    // deep-copy
@@ -478,9 +516,15 @@ RETRY_LOCK_WRITE_SET:
       }
 
       if (!rw_entry_try_lock(w)) {
+         rw_entry_own_key_buffer(w, txn_kvsb->tcfg->kvsb_cfg.data_cfg);
+         rw_entry_iceberg_remove(txn_kvsb, w);
          // This is "no-wait" optimization in the TicToc paper.
-         for (int i = 0; i < lock_num; ++i) {
-            rw_entry_unlock(write_set[i]);
+         for (int locked_num = 0; locked_num < lock_num; ++locked_num) {
+            rw_entry *write_entry_to_unlock = write_set[locked_num];
+            rw_entry_unlock(write_entry_to_unlock);
+            rw_entry_own_key_buffer(write_entry_to_unlock,
+                                    txn_kvsb->tcfg->kvsb_cfg.data_cfg);
+            rw_entry_iceberg_remove(txn_kvsb, write_entry_to_unlock);
          }
 
          // 1us is the value that is mentioned in the paper
@@ -494,8 +538,8 @@ RETRY_LOCK_WRITE_SET:
       timestamp_set v1;
       timestamp_set_load(w->tuple_ts, &v1);
       if (v1.wts != w->wts) {
-         for (int i = 0; i <= lock_num; ++i) {
-            rw_entry_unlock(write_set[i]);
+         for (int locked_num = 0; locked_num <= lock_num; ++locked_num) {
+            rw_entry_unlock(write_set[locked_num]);
          }
          transaction_deinit(txn_kvsb, txn);
          return -1;
@@ -554,17 +598,18 @@ RETRY_LOCK_WRITE_SET:
 #if EXPERIMENTAL_MODE_BYPASS_SPLINTERDB == 1
          if (0) {
 #endif
+            slice key_slice = slice_create(KEY_SIZE, w->key);
             switch (message_class(w->msg)) {
                case MESSAGE_TYPE_INSERT:
                   rc = splinterdb_insert(
-                     txn_kvsb->kvsb, w->key, message_slice(w->msg));
+                     txn_kvsb->kvsb, key_slice, message_slice(w->msg));
                   break;
                case MESSAGE_TYPE_UPDATE:
                   rc = splinterdb_update(
-                     txn_kvsb->kvsb, w->key, message_slice(w->msg));
+                     txn_kvsb->kvsb, key_slice, message_slice(w->msg));
                   break;
                case MESSAGE_TYPE_DELETE:
-                  rc = splinterdb_delete(txn_kvsb->kvsb, w->key);
+                  rc = splinterdb_delete(txn_kvsb->kvsb, key_slice);
                   break;
                default:
                   break;
@@ -634,7 +679,7 @@ local_write(transactional_splinterdb *txn_kvsb,
       rw_entry_set_msg(entry, msg);
    } else {
       // TODO it needs to be checked later for upsert
-      key wkey = key_create_from_slice(entry->key);
+      key wkey = key_create(KEY_SIZE, entry->key);
       if (data_key_compare(cfg, wkey, ukey) == 0) {
          if (message_is_definitive(msg)) {
             platform_free_from_heap(0, (void *)message_data(entry->msg));
@@ -662,9 +707,11 @@ transactional_splinterdb_insert(transactional_splinterdb *txn_kvsb,
    // Call non-transactional insertion for YCSB loading..
    if (txn == NULL) {
       rw_entry tmp_entry;
+      rw_entry_init(&tmp_entry);
       rw_entry_set_key(&tmp_entry, user_key, txn_kvsb->tcfg->kvsb_cfg.data_cfg);
-      splinterdb_insert(txn_kvsb->kvsb, tmp_entry.key, value);
-      platform_free_from_heap(0, (void *)slice_data(tmp_entry.key));
+      splinterdb_insert(
+         txn_kvsb->kvsb, slice_create(KEY_SIZE, tmp_entry.key), value);
+      platform_free_from_heap(0, tmp_entry.key);
       return 0;
    }
 
@@ -725,7 +772,8 @@ transactional_splinterdb_lookup(transactional_splinterdb *txn_kvsb,
                 message_data(entry->msg),
                 message_length(entry->msg));
       } else {
-         rc = splinterdb_lookup(txn_kvsb->kvsb, entry->key, result);
+         rc = splinterdb_lookup(
+            txn_kvsb->kvsb, slice_create(KEY_SIZE, entry->key), result);
       }
 #endif
    } while (!timestamp_set_compare_and_swap(entry->tuple_ts, &v1, &v1));

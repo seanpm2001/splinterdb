@@ -169,6 +169,12 @@ iceberg_insert_and_get_without_increasing_refcount(iceberg_table *table,
                                                    ValueType    **value,
                                                    uint8_t        thread_id);
 
+bool
+iceberg_insert_and_get_key_value(iceberg_table *table,
+                                 KeyType       *key,
+                                 ValueType    **value,
+                                 uint8_t        thread_id);
+
 /**
  *
  * If there exists a key in the hash table, it just overwrites the value without
