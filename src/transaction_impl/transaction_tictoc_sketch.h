@@ -456,6 +456,7 @@ RETRY_LOCK_WRITE_SET:
       }
 
       if (!rw_entry_try_lock(w)) {
+         platform_assert(FALSE, "never fail to lock write set");
          // This is "no-wait" optimization in the TicToc paper.
          for (int i = 0; i < lock_num; ++i) {
             rw_entry_unlock(write_set[i]);
