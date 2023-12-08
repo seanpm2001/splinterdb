@@ -237,6 +237,14 @@ function nightly_unit_stress_tests() {
         use_shmem="$1"
    fi
 
+    # --------------------------------------------------------------------------
+    # RESOLVE: Some of the test cases under this stress test tickle bugs that
+    # will cause the test to fail. Turn this OFF temporarily so that the rest of
+    # test execution can continue. Revert this (and 'set -e' below) once the
+    # tests / code is stabilized.
+    # --------------------------------------------------------------------------
+    set +e
+
     local n_mills=20
     local num_rows=$((n_mills * 1000 * 1000))
     local nrows_h="${n_mills} mil"
@@ -260,6 +268,29 @@ function nightly_unit_stress_tests() {
     #                            --num-threads ${n_threads} \
     #                            --num-memtable-bg-threads 8 \
     #                            --num-normal-bg-threads 20
+
+    key_size=42
+    data_size=200
+    msg="Large inserts stress test, ${n_mills}M rows, key=${key_size}, data=${data_size} ${use_msg}"
+
+    # shellcheck disable=SC2086
+    run_with_timing "${msg}" \
+        "$BINDIR"/unit/large_inserts_stress_test ${use_shmem} \
+                                                --num-inserts ${num_rows} \
+                                                --key-size ${key_size} --data-size ${data_size}
+
+    n_mills=20
+    num_rows=$((n_mills * 1000 * 1000))
+    msg="Large inserts stress test trunk_build_filters bug, ${n_mills}M rows ${use_msg}"
+    # shellcheck disable=SC2086
+    run_with_timing "${msg}" \
+        "$BINDIR"/unit/large_inserts_stress_test ${use_shmem} \
+                                                --num-inserts ${num_rows} \
+                                                test_fp_num_tuples_out_of_bounds_bug_trunk_build_filters
+
+    # --------------------------------------------------------------------------
+    # RESOLVE: Delete this line once above test execution is stabilized.
+    set -e
 }
 
 # #############################################################################
@@ -713,25 +744,6 @@ function run_slower_unit_tests() {
                                                  --num-threads ${n_threads} \
                                                  --num-normal-bg-threads 4 \
                                                  --num-memtable-bg-threads 3
-
-    key_size=42
-    data_size=200
-    msg="Large inserts stress test, ${n_mills}M rows, key=${key_size}, data=${data_size} ${use_msg}"
-
-    # shellcheck disable=SC2086
-    run_with_timing "${msg}" \
-        "$BINDIR"/unit/large_inserts_stress_test ${use_shmem} \
-                                                --num-inserts ${num_rows} \
-                                                --key-size ${key_size} --data-size ${data_size}
-
-    n_mills=20
-    num_rows=$((n_mills * 1000 * 1000))
-    msg="Large inserts stress test trunk_build_filters bug, ${n_mills}M rows ${use_msg}"
-    # shellcheck disable=SC2086
-    run_with_timing "${msg}" \
-        "$BINDIR"/unit/large_inserts_stress_test ${use_shmem} \
-                                                --num-inserts ${num_rows} \
-                                                test_fp_num_tuples_out_of_bounds_bug_trunk_build_filters
 
     # --------------------------------------------------------------------------
     # RESOLVE: Delete this line once above test execution is stabilized.

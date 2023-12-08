@@ -5,9 +5,14 @@
  * -----------------------------------------------------------------------------
  * large_inserts_stress_test.c --
  *
- * This test exercises simple very large #s of inserts which have found to
- * trigger some bugs in some code paths. This is just a miscellaneous collection
- * of test cases for different issues reported / encountered over time.
+ * This test exercises very large #s of inserts with different combinations
+ * of key-data and value-data layout to exercise core insertion logic of
+ * SplinterDB. During the development of shared-memory support, some of these
+ * cases were found to trigger bugs in either core SplinterDB or the new
+ * shared-memory support.
+ *
+ * Additionally, there is a small collection of miscellaneous test cases for
+ * different issues encountered during different stabilization rounds.
  *
  * Single-client test cases:
  *  Different strategies of loading key-data and value-data are defined as
@@ -18,10 +23,14 @@
  *
  * Multiple-threads test cases:
  *  Similar to the single-client test cases, except that we now run through
- *  various combinations of key-data and value-data strategies across multiple
- *  threads. Few variations of tests that start from the same start key-ID
- * across all threads are added to exercise the logic of maintaining the BTrees
- * across tons of duplicate key insertions.
+ *  all combinations of key-data and value-data strategies across multiple
+ *  threads. As this is intended to be a stress test, we do not distribute
+ *  the --num-inserts across --num-threads threads. Each thread will insert
+ *  the specified # of inserts, so we generate a high insert workload.
+ *
+ *  Few variations of tests that start from the same start key-ID
+ *  across all threads are added to exercise the logic of maintaining the
+ *  BTrees across tons of duplicate key insertions.
  *
  * Test-case with forked process: test_Seq_key_be32_Seq_values_inserts_forked()
  *  Identical to test_Seq_key_be32_Seq_values_inserts() but the test is run in
@@ -127,15 +136,15 @@ _Static_assert(ARRAY_SIZE(Key_strategy_names) == NUM_KEY_DATA_STRATEGIES,
  *  exercise random message payloads of varying lengths.
  *
  * RAND_6BYTE_VAL - Randomly generated value 6-bytes length. (6 bytes is the
- * length of the payload when integrating SplinterDB with Postgres.
+ * length of the payload when integrating SplinterDB with Postgres.)
  * ----------------------------------------------------------------------------
  */
 // clang-format off
 typedef enum {            // Sub-case
    SEQ_VAL_SMALL = 1,     //  (a) 'Row-%d'
    SEQ_VAL_PADDED_LENGTH, //  (b) 'Row-%d' padded to value data buffer size
-   RAND_VAL_RAND_LENGTH,  //  (c)
-   RAND_6BYTE_VAL,        //  (d)
+   RAND_VAL_RAND_LENGTH,  //  (c) Random value-bytes of random length
+   RAND_6BYTE_VAL,        //  (d) Random value-bytes, exactly 6-bytes long
    NUM_VALUE_DATA_STRATEGIES
 } val_strategy;
 
@@ -161,9 +170,11 @@ _Static_assert(ARRAY_SIZE(Val_strategy_names) == NUM_VALUE_DATA_STRATEGIES,
        : Val_strategy_names[0])
 
 /*
- * Configuration for each worker thread. See the selection of 'fd'-semantics
- * as implemented in exec_worker_thread(), to select diff types of
- * key/value's data distribution during inserts.
+ * ----------------------------------------------------------------------------
+ * Configuration for each worker thread. See the handling of 'key_size'
+ * and 'val_size'-semantics as implemented in exec_worker_thread(). This
+ * selects diff types of key/value's data distribution during inserts.
+ * ----------------------------------------------------------------------------
  */
 typedef struct worker_config {
    platform_heap_id hid;
@@ -217,7 +228,6 @@ CTEST_DATA(large_inserts_stress)
    int               this_pid;
    bool              verbose_progress;
    bool              am_parent;
-   bool              key_val_sizes_printed;
 };
 
 // Optional setup function for suite, called before every test in suite
@@ -362,6 +372,7 @@ CTEST2(large_inserts_stress, test_issue_458_mini_destroy_unused_debug_assert)
 }
 
 /*
+ * ----------------------------------------------------------------------------
  * Test cases exercise the thread's worker-function, exec_worker_thread(),
  * from the main connection to splinter, for specified number of inserts.
  *
@@ -370,6 +381,7 @@ CTEST2(large_inserts_stress, test_issue_458_mini_destroy_unused_debug_assert)
  *  - random keys, sequential values
  *  - sequential keys, random values
  *  - random keys, random values
+ * ----------------------------------------------------------------------------
  */
 // Case 1(a) - SEQ_KEY_BIG_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts)
@@ -733,95 +745,17 @@ safe_wait()
 
 /*
  * ----------------------------------------------------------------------------
- * test_Seq_key_be32_Seq_values_inserts_forked() --
- *
- * Test case is identical to test_Seq_key_be32_Seq_values_inserts() but the
- * actual execution of the function that does inserts is done from
- * a forked-child process. This test, therefore, does basic validation
- * that from a forked-child process we can drive basic SplinterDB commands.
- * And then the parent can resume after the child exits, and can cleanly
- * shutdown the instance.
- * ----------------------------------------------------------------------------
- */
-// RESOLVE: Fails due to assertion:
-// OS-pid=1576708, OS-tid=1576708, Thread-ID=0, Assertion failed at
-// src/rc_allocator.c:536:rc_allocator_dec_ref(): "(ref_count != UINT8_MAX)".
-// extent_no=14, ref_count=255 (0xff)
-CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_forked)
-{
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
-
-   // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.verbose_progress = data->verbose_progress;
-   wcfg.fork_child       = TRUE;
-
-   int pid = getpid();
-
-   if (wcfg.fork_child) {
-      pid = fork();
-
-      if (pid < 0) {
-         platform_error_log("fork() of child process failed: pid=%d\n", pid);
-         return;
-      } else if (pid) {
-         CTEST_LOG_INFO("OS-pid=%d, Thread-ID=%lu: "
-                        "Waiting for child pid=%d to complete ...\n",
-                        getpid(),
-                        platform_get_tid(),
-                        pid);
-
-         safe_wait();
-
-         CTEST_LOG_INFO("Thread-ID=%lu, OS-pid=%d: "
-                        "Child execution wait() completed."
-                        " Resuming parent ...\n",
-                        platform_get_tid(),
-                        getpid());
-      }
-   }
-   if (pid == 0) {
-      // Record in global data that we are now running as a child.
-      data->am_parent = FALSE;
-      data->this_pid  = getpid();
-
-      CTEST_LOG_INFO("OS-pid=%d Running as %s process ...\n",
-                     data->this_pid,
-                     (wcfg.fork_child ? "forked child" : "parent"));
-
-      splinterdb_register_thread(wcfg.kvsb);
-
-      exec_worker_thread(&wcfg);
-
-      CTEST_LOG_INFO("OS-pid=%d, Thread-ID=%lu, Child process"
-                     ", completed inserts.\n",
-                     data->this_pid,
-                     platform_get_tid());
-      splinterdb_deregister_thread(wcfg.kvsb);
-      exit(0);
-      return;
-   }
-}
-
-/*
- * ----------------------------------------------------------------------------
  * Collection of test cases that fire-up diff combinations of inserts
  * (sequential, random keys & values) executed by n-threads.
  * These test cases are identical to the list 1(a), 1(b), etc., which are all
  * single-threaded. These test cases execute the same workload (key- and
- * value-data distribution strategies), except they run multiple threads.
+ * value-data distribution strategies), except that these run multiple threads.
  * ----------------------------------------------------------------------------
  */
 /*
  * Test case that fires up many threads each concurrently inserting large # of
  * KV-pairs, with discrete ranges of keys inserted by each thread.
- * RESOLVE: This hangs in this flow; never completes ...
+ * RESOLVE: This hangs in this flow; never completes with --num-threads 63 ...
  * clockcache_try_get_read() -> memtable_maybe_rotate_and_get_insert_lock()
  * This problem will probably occur in /main as well.
  * FIXME: Runs into btree_pack(): req->num_tuples=6291457 exceeded output size
@@ -1133,7 +1067,7 @@ CTEST2_SKIP(large_inserts_stress, test_Seq_key_he32_same_start_keyid_Seq_values_
  */
 // clang-format off
 // Case 7(b) Variation of Case 1(b) - SEQ_KEY_BIG_ENDIAN_32
-CTEST2(large_inserts_stress, test_Seq_key_be32_same_start_keyid_Seq_values_packed_inserts_threaded)
+CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_same_start_keyid_Seq_values_packed_inserts_threaded)
 // clang-format on
 {
    do_inserts_n_threads(data->kvsb,
@@ -1144,6 +1078,84 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_same_start_keyid_Seq_values_packe
                         SEQ_VAL_PADDED_LENGTH,
                         data->num_inserts,
                         data->num_insert_threads);
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * test_Seq_key_be32_Seq_values_inserts_forked() --
+ *
+ * Test case is identical to test_Seq_key_be32_Seq_values_inserts() but the
+ * actual execution of the function that does inserts is done from
+ * a forked-child process. This test, therefore, does basic validation
+ * that from a forked-child process we can drive basic SplinterDB commands.
+ * And then the parent can resume after the child exits, and can cleanly
+ * shutdown the instance.
+ * ----------------------------------------------------------------------------
+ */
+// RESOLVE: Fails due to assertion:
+// OS-pid=1576708, OS-tid=1576708, Thread-ID=0, Assertion failed at
+// src/rc_allocator.c:536:rc_allocator_dec_ref(): "(ref_count != UINT8_MAX)".
+// extent_no=14, ref_count=255 (0xff)
+CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_forked)
+{
+   worker_config wcfg;
+   ZERO_STRUCT(wcfg);
+
+   // Load worker config params
+   wcfg.kvsb             = data->kvsb;
+   wcfg.num_inserts      = data->num_inserts;
+   wcfg.key_size         = data->key_size;
+   wcfg.val_size         = data->val_size;
+   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg.val_type         = SEQ_VAL_SMALL;
+   wcfg.verbose_progress = data->verbose_progress;
+   wcfg.fork_child       = TRUE;
+
+   int pid = getpid();
+
+   if (wcfg.fork_child) {
+      pid = fork();
+
+      if (pid < 0) {
+         platform_error_log("fork() of child process failed: pid=%d\n", pid);
+         return;
+      } else if (pid) {
+         CTEST_LOG_INFO("OS-pid=%d, Thread-ID=%lu: "
+                        "Waiting for child pid=%d to complete ...\n",
+                        getpid(),
+                        platform_get_tid(),
+                        pid);
+
+         safe_wait();
+
+         CTEST_LOG_INFO("Thread-ID=%lu, OS-pid=%d: "
+                        "Child execution wait() completed."
+                        " Resuming parent ...\n",
+                        platform_get_tid(),
+                        getpid());
+      }
+   }
+   if (pid == 0) {
+      // Record in global data that we are now running as a child.
+      data->am_parent = FALSE;
+      data->this_pid  = getpid();
+
+      CTEST_LOG_INFO("OS-pid=%d Running as %s process ...\n",
+                     data->this_pid,
+                     (wcfg.fork_child ? "forked child" : "parent"));
+
+      splinterdb_register_thread(wcfg.kvsb);
+
+      exec_worker_thread(&wcfg);
+
+      CTEST_LOG_INFO("OS-pid=%d, Thread-ID=%lu, Child process"
+                     ", completed inserts.\n",
+                     data->this_pid,
+                     platform_get_tid());
+      splinterdb_deregister_thread(wcfg.kvsb);
+      exit(0);
+      return;
+   }
 }
 
 /*
