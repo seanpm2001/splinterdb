@@ -197,14 +197,10 @@ static void *
 exec_worker_thread(void *w);
 
 static void
-do_inserts_n_threads(splinterdb      *kvsb,
-                     platform_heap_id hid,
-                     size_t           key_size,
-                     size_t           val_size,
-                     key_strategy     key_type,
-                     val_strategy     val_type,
-                     uint64           num_inserts,
-                     uint64           num_insert_threads);
+do_inserts_n_threads(worker_config *data_work_cfg,
+                     key_strategy   key_type,
+                     val_strategy   val_type,
+                     uint64         num_insert_threads);
 
 // Run n-threads concurrently inserting many KV-pairs
 #define NUM_THREADS 8
@@ -224,10 +220,10 @@ CTEST_DATA(large_inserts_stress)
    uint64            num_insert_threads;
    size_t            key_size; // --key-size test execution argument
    size_t            val_size; // --data-size test execution argument
-   uint64            rand_seed;
    int               this_pid;
    bool              verbose_progress;
    bool              am_parent;
+   worker_config     work_cfg;
 };
 
 // Optional setup function for suite, called before every test in suite
@@ -294,6 +290,16 @@ CTEST_SETUP(large_inserts_stress)
    CTEST_LOG_INFO("... with key-size=%lu, value-size=%lu bytes\n",
                   data->key_size,
                   data->val_size);
+
+   // Setup default configuration for each worker-thread ...
+   ZERO_STRUCT(data->work_cfg);
+   data->work_cfg.hid              = data->hid;
+   data->work_cfg.kvsb             = data->kvsb;
+   data->work_cfg.num_inserts      = data->num_inserts;
+   data->work_cfg.key_size         = data->key_size;
+   data->work_cfg.val_size         = data->val_size;
+   data->work_cfg.rand_seed        = master_cfg.seed;
+   data->work_cfg.verbose_progress = master_cfg.verbose_progress;
 }
 
 // Optional teardown function for suite, called after every test in suite
@@ -386,56 +392,35 @@ CTEST2(large_inserts_stress, test_issue_458_mini_destroy_unused_debug_assert)
 // Case 1(a) - SEQ_KEY_BIG_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.verbose_progress = data->verbose_progress;
+   wcfg->key_type = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg->val_type = SEQ_VAL_SMALL;
 
-   exec_worker_thread(&wcfg);
+   exec_worker_thread(wcfg);
 }
 
 // Case 1(b) - SEQ_KEY_BIG_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_packed_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_PADDED_LENGTH;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg->val_type = SEQ_VAL_PADDED_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 1(c) - SEQ_KEY_BIG_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_length_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = RAND_VAL_RAND_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg->val_type = RAND_VAL_RAND_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 /*
@@ -446,75 +431,45 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_length_values_inserts)
 CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_6byte_values_inserts)
 // clang-format on
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = RAND_6BYTE_VAL;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg->val_type = RAND_6BYTE_VAL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 2(a) - SEQ_KEY_HOST_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32;
+   wcfg->val_type = SEQ_VAL_SMALL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 2(b) - SEQ_KEY_HOST_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_packed_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_PADDED_LENGTH;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32;
+   wcfg->val_type = SEQ_VAL_PADDED_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 2(c) - SEQ_KEY_HOST_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_length_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32;
-   wcfg.val_type         = RAND_VAL_RAND_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32;
+   wcfg->val_type = RAND_VAL_RAND_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 /*
@@ -525,56 +480,34 @@ CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_length_values_inserts)
 CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_6byte_values_inserts)
 // clang-format on
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32;
-   wcfg.val_type         = RAND_6BYTE_VAL;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32;
+   wcfg->val_type = RAND_6BYTE_VAL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 3(a) - SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
+   wcfg->val_type = SEQ_VAL_SMALL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 3(b) - SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_packed_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
-   wcfg.val_type         = SEQ_VAL_PADDED_LENGTH;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
+   wcfg->val_type = SEQ_VAL_PADDED_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 3(c) - SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH
@@ -582,153 +515,89 @@ CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_packed_inserts)
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Rand_length_values_inserts)
 // clang-format on
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
-   wcfg.val_type         = RAND_VAL_RAND_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH;
+   wcfg->val_type = RAND_VAL_RAND_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 4(a) - RAND_KEY_RAND_LENGTH
 CTEST2(large_inserts_stress, test_Rand_key_Seq_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_RAND_LENGTH;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_RAND_LENGTH;
+   wcfg->val_type = SEQ_VAL_SMALL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 4(b) - RAND_KEY_RAND_LENGTH
 CTEST2(large_inserts_stress, test_Rand_key_Seq_values_packed_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_RAND_LENGTH;
-   wcfg.val_type         = SEQ_VAL_PADDED_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_RAND_LENGTH;
+   wcfg->val_type = SEQ_VAL_PADDED_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 4(c) - RAND_KEY_RAND_LENGTH
 CTEST2(large_inserts_stress, test_Rand_key_Rand_length_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_RAND_LENGTH;
-   wcfg.val_type         = RAND_VAL_RAND_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_RAND_LENGTH;
+   wcfg->val_type = RAND_VAL_RAND_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 4(d) - RAND_KEY_RAND_LENGTH
 CTEST2(large_inserts_stress, test_Rand_key_Rand_6byte_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_RAND_LENGTH;
-   wcfg.val_type         = RAND_6BYTE_VAL;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_RAND_LENGTH;
+   wcfg->val_type = RAND_6BYTE_VAL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 5(a) - RAND_KEY_DATA_BUF_SIZE
 CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_DATA_BUF_SIZE;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_DATA_BUF_SIZE;
+   wcfg->val_type = SEQ_VAL_SMALL;
+   exec_worker_thread(wcfg);
 }
 
 // Case 5(b) - RAND_KEY_DATA_BUF_SIZE
 CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_packed_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_DATA_BUF_SIZE;
-   wcfg.val_type         = SEQ_VAL_PADDED_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_DATA_BUF_SIZE;
+   wcfg->val_type = SEQ_VAL_PADDED_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 // Case 5(c) - RAND_KEY_DATA_BUF_SIZE
 CTEST2(large_inserts_stress, test_Rand_key_packed_Rand_length_values_inserts)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = RAND_KEY_DATA_BUF_SIZE;
-   wcfg.val_type         = RAND_VAL_RAND_LENGTH;
-   wcfg.rand_seed        = data->rand_seed;
-   wcfg.verbose_progress = data->verbose_progress;
-
-   exec_worker_thread(&wcfg);
+   wcfg->key_type = RAND_KEY_DATA_BUF_SIZE;
+   wcfg->val_type = RAND_VAL_RAND_LENGTH;
+   exec_worker_thread(wcfg);
 }
 
 static void
@@ -764,13 +633,9 @@ safe_wait()
 // Case 1(a) - SEQ_KEY_BIG_ENDIAN_32
 CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_threaded)
 {
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_BIG_ENDIAN_32,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -779,13 +644,9 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_packed_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_BIG_ENDIAN_32,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -796,13 +657,9 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_Seq_values_packed_inserts_threade
 CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_length_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_BIG_ENDIAN_32,
                         RAND_VAL_RAND_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -811,13 +668,9 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_length_values_inserts_thread
 CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_6byte_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_BIG_ENDIAN_32,
                         RAND_6BYTE_VAL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -826,13 +679,9 @@ CTEST2(large_inserts_stress, test_Seq_key_be32_Rand_6byte_values_inserts_threade
 CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -841,13 +690,9 @@ CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_packed_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -856,13 +701,9 @@ CTEST2(large_inserts_stress, test_Seq_key_he32_Seq_values_packed_inserts_threade
 CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_length_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32,
                         RAND_VAL_RAND_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -871,13 +712,9 @@ CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_length_values_inserts_thread
 CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_6byte_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32,
                         RAND_6BYTE_VAL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -886,13 +723,9 @@ CTEST2(large_inserts_stress, test_Seq_key_he32_Rand_6byte_values_inserts_threade
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -901,13 +734,9 @@ CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_inserts_threade
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_packed_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -916,13 +745,9 @@ CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Seq_values_packed_inserts_
 CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Rand_length_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32_PADDED_LENGTH,
                         RAND_VAL_RAND_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -931,13 +756,9 @@ CTEST2(large_inserts_stress, test_Seq_key_packed_he32_Rand_length_values_inserts
 CTEST2(large_inserts_stress, test_Rand_key_Seq_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_RAND_LENGTH,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -946,13 +767,9 @@ CTEST2(large_inserts_stress, test_Rand_key_Seq_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Rand_key_Seq_values_packed_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_RAND_LENGTH,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -961,13 +778,9 @@ CTEST2(large_inserts_stress, test_Rand_key_Seq_values_packed_inserts_threaded)
 CTEST2(large_inserts_stress, test_Rand_key_Rand_length_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_RAND_LENGTH,
                         RAND_VAL_RAND_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -976,13 +789,9 @@ CTEST2(large_inserts_stress, test_Rand_key_Rand_length_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Rand_key_Rand_6byte_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_RAND_LENGTH,
                         RAND_6BYTE_VAL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -991,13 +800,9 @@ CTEST2(large_inserts_stress, test_Rand_key_Rand_6byte_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_DATA_BUF_SIZE,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -1008,13 +813,9 @@ CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_inserts_threaded)
 CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_packed_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_DATA_BUF_SIZE,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -1023,13 +824,9 @@ CTEST2(large_inserts_stress, test_Rand_key_packed_Seq_values_packed_inserts_thre
 CTEST2(large_inserts_stress, test_Rand_key_packed_Rand_length_values_inserts_threaded)
 {
    // clang-format on
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         RAND_KEY_DATA_BUF_SIZE,
                         RAND_VAL_RAND_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -1049,13 +846,9 @@ CTEST2(large_inserts_stress, test_Rand_key_packed_Rand_length_values_inserts_thr
 CTEST2_SKIP(large_inserts_stress, test_Seq_key_he32_same_start_keyid_Seq_values_inserts_threaded)
 // clang-format on
 {
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_HOST_ENDIAN_32_SAME_START_ID,
                         SEQ_VAL_SMALL,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -1070,13 +863,9 @@ CTEST2_SKIP(large_inserts_stress, test_Seq_key_he32_same_start_keyid_Seq_values_
 CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_same_start_keyid_Seq_values_packed_inserts_threaded)
 // clang-format on
 {
-   do_inserts_n_threads(data->kvsb,
-                        data->hid,
-                        data->key_size,
-                        data->val_size,
+   do_inserts_n_threads(&data->work_cfg,
                         SEQ_KEY_BIG_ENDIAN_32_SAME_START_ID,
                         SEQ_VAL_PADDED_LENGTH,
-                        data->num_inserts,
                         data->num_insert_threads);
 }
 
@@ -1098,22 +887,16 @@ CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_same_start_keyid_Seq_values_
 // extent_no=14, ref_count=255 (0xff)
 CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_forked)
 {
-   worker_config wcfg;
-   ZERO_STRUCT(wcfg);
+   worker_config *wcfg = &data->work_cfg;
 
    // Load worker config params
-   wcfg.kvsb             = data->kvsb;
-   wcfg.num_inserts      = data->num_inserts;
-   wcfg.key_size         = data->key_size;
-   wcfg.val_size         = data->val_size;
-   wcfg.key_type         = SEQ_KEY_BIG_ENDIAN_32;
-   wcfg.val_type         = SEQ_VAL_SMALL;
-   wcfg.verbose_progress = data->verbose_progress;
-   wcfg.fork_child       = TRUE;
+   wcfg->key_type   = SEQ_KEY_BIG_ENDIAN_32;
+   wcfg->val_type   = SEQ_VAL_SMALL;
+   wcfg->fork_child = TRUE;
 
    int pid = getpid();
 
-   if (wcfg.fork_child) {
+   if (wcfg->fork_child) {
       pid = fork();
 
       if (pid < 0) {
@@ -1142,17 +925,17 @@ CTEST2_SKIP(large_inserts_stress, test_Seq_key_be32_Seq_values_inserts_forked)
 
       CTEST_LOG_INFO("OS-pid=%d Running as %s process ...\n",
                      data->this_pid,
-                     (wcfg.fork_child ? "forked child" : "parent"));
+                     (wcfg->fork_child ? "forked child" : "parent"));
 
-      splinterdb_register_thread(wcfg.kvsb);
+      splinterdb_register_thread(wcfg->kvsb);
 
-      exec_worker_thread(&wcfg);
+      exec_worker_thread(wcfg);
 
       CTEST_LOG_INFO("OS-pid=%d, Thread-ID=%lu, Child process"
                      ", completed inserts.\n",
                      data->this_pid,
                      platform_get_tid());
-      splinterdb_deregister_thread(wcfg.kvsb);
+      splinterdb_deregister_thread(wcfg->kvsb);
       exit(0);
       return;
    }
@@ -1242,31 +1025,26 @@ CTEST2(large_inserts_stress, test_fp_num_tuples_out_of_bounds_bug_trunk_build_fi
  * control via parameters are:
  *
  * Parameters:
+ * - data_work_cfg      - Template-configs for all worker-threads
  * - key_type           - Key-data strategy
  * - val_type           - Value-data strategy
- * - num_inserts        - # of inserts / thread
  * - num_insert_threads - # of inserting threads to start-up
  * ----------------------------------------------------------------------------
  */
 static void
-do_inserts_n_threads(splinterdb      *kvsb,
-                     platform_heap_id hid,
-                     size_t           key_size,
-                     size_t           val_size,
-                     key_strategy     key_type,
-                     val_strategy     val_type,
-                     uint64           num_inserts,
-                     uint64           num_insert_threads)
+do_inserts_n_threads(worker_config *data_work_cfg,
+                     key_strategy   key_type,
+                     val_strategy   val_type,
+                     uint64         num_insert_threads)
 {
    platform_memfrag memfrag_wcfg;
-   worker_config   *wcfg = TYPED_ARRAY_ZALLOC(hid, wcfg, num_insert_threads);
+   worker_config   *wcfg =
+      TYPED_ARRAY_ZALLOC(data_work_cfg->hid, wcfg, num_insert_threads);
 
    // Setup thread-specific insert parameters
    for (int ictr = 0; ictr < num_insert_threads; ictr++) {
-      wcfg[ictr].kvsb        = kvsb;
-      wcfg[ictr].key_size    = key_size;
-      wcfg[ictr].val_size    = val_size;
-      wcfg[ictr].num_inserts = num_inserts;
+      // First get all common config-params for each worker
+      memmove(&wcfg[ictr], data_work_cfg, sizeof(*data_work_cfg));
 
       // Choose the start key-ID for each thread.
       switch (key_type) {
@@ -1279,6 +1057,7 @@ do_inserts_n_threads(splinterdb      *kvsb,
                            : SEQ_KEY_BIG_ENDIAN_32);
             break;
          default:
+            // All other inserts will start with non-overlapping key-IDs.
             wcfg[ictr].start_value = (wcfg[ictr].num_inserts * ictr);
             break;
       }
@@ -1292,7 +1071,7 @@ do_inserts_n_threads(splinterdb      *kvsb,
 
    platform_memfrag memfrag_thread_ids;
    platform_thread *thread_ids =
-      TYPED_ARRAY_ZALLOC(hid, thread_ids, num_insert_threads);
+      TYPED_ARRAY_ZALLOC(data_work_cfg->hid, thread_ids, num_insert_threads);
 
    // Fire-off the threads to drive inserts ...
    // clang-format off
@@ -1319,8 +1098,8 @@ do_inserts_n_threads(splinterdb      *kvsb,
          ASSERT_TRUE(FALSE);
       }
    }
-   platform_free(hid, &memfrag_thread_ids);
-   platform_free(hid, &memfrag_wcfg);
+   platform_free(data_work_cfg->hid, &memfrag_thread_ids);
+   platform_free(data_work_cfg->hid, &memfrag_wcfg);
 }
 
 /*
@@ -1434,7 +1213,6 @@ exec_worker_thread(void *w)
       default:
          break;
    }
-
 
    for (ictr = 0; ictr < (num_inserts / MILLION); ictr++) {
       for (jctr = 0; jctr < MILLION; jctr++) {

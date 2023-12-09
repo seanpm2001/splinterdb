@@ -934,20 +934,34 @@ function run_other_driver_tests() {
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
    fi
-    run_with_timing "Cache test${use_msg}" \
-        "$BINDIR"/driver_test cache_test --seed "$SEED"
 
+    # shellcheck disable=SC2086
+    run_with_timing "Cache test${use_msg}" \
+        "$BINDIR"/driver_test cache_test --seed "$SEED" $use_shmem
+
+    # shellcheck disable=SC2086
     run_with_timing "Log test${use_msg}" \
-        "$BINDIR"/driver_test log_test --seed "$SEED"
+        "$BINDIR"/driver_test log_test --seed "$SEED" $use_shmem
 
     # shellcheck disable=SC2086
     run_with_timing "Filter test${use_msg}" \
         "$BINDIR"/driver_test filter_test --seed "$SEED" $use_shmem
 
+   # -----------------------------------------------------------------------
    # If supplied, --perf needs to be the 1st arg as it's parsed-away first.
-    # shellcheck disable=SC2086
-   run_with_timing "Filter perf tests using shared memory" \
-                   "$BINDIR"/driver_test filter_test --perf --seed "$SEED" $use_shmem
+   # The perf-run of filter-test exercises fingerprint handling. Memory mgmt
+   # for fingerprint arrays was overhauled as part of this commit, so it's
+   # relevant to exercise this test-sub-case with shared memory enabled.
+   # Morover, each run of filter_test --perf takes ~22m for debug-builds in
+   # CI jobs. To keep overall CI runs within timeout limits, only run this
+   # when shared-memory is configured.
+   # -----------------------------------------------------------------------
+   # shellcheck disable=SC2086
+   if [ "$use_shmem" != "" ]; then
+       run_with_timing "Filter perf tests${use_msg}" \
+                       "$BINDIR"/driver_test filter_test --perf \
+                                            --seed "$SEED" $use_shmem
+   fi
 
 }
 
@@ -959,6 +973,14 @@ function run_other_driver_tests() {
 # remaining tests when they can run successfully in this mode.
 # #######################################################################
 function run_tests_with_shared_memory() {
+
+   {
+      echo " "
+      echo "-- Tests with shared memory configured --" >> "${test_exec_log_file}"
+      echo " "
+   } >> "${test_exec_log_file}"
+
+   shmem_tests_run_start=$SECONDS
 
    # Run all the unit-tests first, to get basic coverage of shared-memory support.
    run_with_timing "Fast unit tests using shared memory" "$BINDIR"/unit_test "--use-shmem"
@@ -982,6 +1004,8 @@ function run_tests_with_shared_memory() {
    # not needed when invoking them. These tests will fork one or more child
    # processes.
    run_slower_forked_process_tests
+
+   record_elapsed_time ${shmem_tests_run_start} "Tests with shared memory configured"
 }
 
 # ##################################################################
@@ -1125,6 +1149,8 @@ run_splinter_perf_tests ""
 run_btree_tests ""
 
 run_other_driver_tests ""
+
+record_elapsed_time ${testRunStartSeconds} "Tests without shared memory configured"
 
 # ------------------------------------------------------------------------
 # Re-run a collection of tests using shared-memory.
