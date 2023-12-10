@@ -59,13 +59,14 @@ function usage() {
    echo "To run CI-regression tests       : INCLUDE_SLOW_TESTS=true ./${Me}"
    echo "To run nightly regression tests  : RUN_NIGHTLY_TESTS=true ./${Me}"
    echo "To run make build-and-test tests : RUN_MAKE_TESTS=true ./${Me}"
-   echo
+   echo " "
    echo "To run a smaller collection of slow running tests,
 name the function that drives the test execution.
 Examples:"
    echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_btree_tests"
-   echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_splinter_functionality_tests"
+   echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_btree_tests --use-shmem"
    echo "  INCLUDE_SLOW_TESTS=true ./test.sh nightly_cache_perf_tests"
+   echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_splinter_functionality_tests"
    echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_splinter_functionality_tests --use-shmem"
    echo "  INCLUDE_SLOW_TESTS=true ./test.sh run_tests_with_shared_memory"
 }
@@ -113,7 +114,7 @@ function run_with_timing() {
 
    # Starting a new test batch. So inject blank link for this chunk of output
    start_seconds=$SECONDS
-   echo
+   echo " "
    set -x
    "$@"
    set +x
@@ -129,7 +130,7 @@ function cat_exec_log_file() {
         cat "${test_exec_log_file}"
         rm -f "${test_exec_log_file}"
    fi
-   echo
+   echo " "
    echo "$(TZ="America/Los_Angeles" date) End SplinterDB Test Suite Execution."
 }
 
@@ -232,7 +233,10 @@ function nightly_functionality_stress_tests() {
 # of execution, especially to shake out AIO / thread registration issues.
 # #############################################################################
 function nightly_unit_stress_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
 
     local n_mills=10
     local num_rows=$((n_mills * 1000 * 1000))
@@ -248,7 +252,7 @@ function nightly_unit_stress_tests() {
     # with this configuration. The config-params listed below -should- work but
     # this combination has never been exercised successfully due to lack of hw.
     echo "$Me: Run ${test_name} with ${n_mills} million rows, ${n_threads} threads"
-    # RESOLVE: Revert: shell_check disable=SC2086
+    # RESOLVE: Revert: shellcheck disable=SC2086
     # run_with_timing "Large Inserts Stress test ${test_descr}" \
     #         "$BINDIR"/unit/${test_name} \
     #                            $use_shmem \
@@ -277,7 +281,6 @@ function run_nightly_stress_tests() {
 # Async-systems are a bit unstable now, so will online them shortly in future.
 # #############################################################################
 function nightly_sync_perf_tests() {
-    local use_shmem=$1
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
@@ -347,8 +350,11 @@ function nightly_sync_perf_tests() {
 # Nightly Cache Performance tests with async disabled
 # #############################################################################
 function nightly_cache_perf_tests() {
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
 
-    local use_shmem=$1
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
@@ -401,7 +407,10 @@ function nightly_async_perf_tests() {
 # Run through collection of nightly Performance-oriented tests
 # #############################################################################
 function run_nightly_perf_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
 
     # shellcheck disable=SC2086
     nightly_sync_perf_tests ${use_shmem}
@@ -416,7 +425,7 @@ function run_nightly_perf_tests() {
 # #############################################################################
 # Method to check that the command actually does fail; Otherwise it's an error.
 function run_check_rc() {
-    echo
+    echo " "
     set +e
     "$@"
     local rc=$?
@@ -596,7 +605,10 @@ function test_make_run_tests() {
 # This can be invoked w/ or w/o the "--use-shmem" arg.
 # ##################################################################
 function run_fast_unit_tests() {
-   local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
 
    "$BINDIR"/unit/splinterdb_quick_test "$use_shmem"
    "$BINDIR"/unit/btree_test "$use_shmem"
@@ -605,14 +617,15 @@ function run_fast_unit_tests() {
    "$BINDIR"/unit/limitations_test "$use_shmem"
    "$BINDIR"/unit/task_system_test "$use_shmem"
    "$BINDIR"/unit/splinterdb_heap_id_mgmt_test "$use_shmem"
+   "$BINDIR"/unit/platform_apis_test "$use_shmem"
 
-   echo
+   echo " "
    # Just exercise with some combination of background threads to ensure
    # that basic usage of background threads still works.
    # shellcheck disable=SC2086
    "$BINDIR"/unit/task_system_test $use_shmem
 
-   echo
+   echo " "
    # shellcheck disable=SC2086
    "$BINDIR"/driver_test io_apis_test $use_shmem
 }
@@ -625,7 +638,10 @@ function run_fast_unit_tests() {
 # Execute this set w/ and w/o the "--use-shmem" arg.
 # ##################################################################
 function run_slower_unit_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
 
     local use_msg=
     if [ "$use_shmem" != "" ]; then
@@ -735,7 +751,11 @@ function run_slower_forked_process_tests() {
 # Execute this set w/ and w/o the "--use-shmem" arg.
 # ##################################################################
 function run_splinter_functionality_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
+
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
@@ -774,7 +794,11 @@ function run_splinter_functionality_tests() {
 # Execute this set w/ and w/o the "--use-shmem" arg.
 # ##################################################################
 function run_splinter_perf_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
+
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
@@ -823,7 +847,11 @@ function run_splinter_perf_tests() {
 # Execute BTree tests, including BTree perf test case
 # ##################################################################
 function run_btree_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
+
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
@@ -857,19 +885,26 @@ function run_btree_tests() {
 # Run remaining functionality-related tests from driver_test
 # ##################################################################
 function run_other_driver_tests() {
-    local use_shmem=$1
+    local use_shmem=""
+    if [ $# -eq 1 ]; then
+        use_shmem="$1"
+   fi
+
     local use_msg=
     if [ "$use_shmem" != "" ]; then
         use_msg=", using shared memory"
    fi
+    # shellcheck disable=SC2086
     run_with_timing "Cache test${use_msg}" \
-        "$BINDIR"/driver_test cache_test --seed "$SEED"
+        "$BINDIR"/driver_test cache_test --seed "$SEED" $use_shmem
 
+    # shellcheck disable=SC2086
     run_with_timing "Log test${use_msg}" \
-        "$BINDIR"/driver_test log_test --seed "$SEED"
+        "$BINDIR"/driver_test log_test --seed "$SEED" $use_shmem
 
+    # shellcheck disable=SC2086
     run_with_timing "Filter test${use_msg}" \
-        "$BINDIR"/driver_test filter_test --seed "$SEED"
+        "$BINDIR"/driver_test filter_test --seed "$SEED" $use_shmem
 }
 
 # #######################################################################
@@ -880,6 +915,13 @@ function run_other_driver_tests() {
 # remaining tests when they can run successfully in this mode.
 # #######################################################################
 function run_tests_with_shared_memory() {
+   {
+      echo " "
+      echo "-- Tests with shared memory configured --" >> "${test_exec_log_file}"
+      echo " "
+   } >> "${test_exec_log_file}"
+
+   shmem_tests_run_start=$SECONDS
 
    # Run all the unit-tests first, to get basic coverage of shared-memory support.
    run_with_timing "Fast unit tests using shared memory" "$BINDIR"/unit_test "--use-shmem"
@@ -902,6 +944,8 @@ function run_tests_with_shared_memory() {
    # not needed when invoking them. These tests will fork one or more child
    # processes.
    run_slower_forked_process_tests
+
+   record_elapsed_time ${shmem_tests_run_start} "Tests with shared memory configured"
 }
 
 # ##################################################################
@@ -961,10 +1005,10 @@ if [ "$INCLUDE_SLOW_TESTS" != "true" ]; then
    "$BINDIR"/unit/splinterdb_quick_test --list
    set +x
 
-   echo
+   echo " "
    echo "NOTE: **** Only running fast unit tests ****"
    echo "To run all tests, set the env var, and re-run: $ INCLUDE_SLOW_TESTS=true ./$Me"
-   echo
+   echo " "
 
    # Exercise config-parsing test case. Here, we feed-in a set of
    # --config-params that the test code knows to "expect" and validates.
@@ -1003,30 +1047,21 @@ UNIT_TESTS_DB_DEV="unit_tests_db"
 # can debug script changes to ensure that test-execution still works.
 #
 # Examples:
+#  Run BTree functional tests w/default memory configuration:
 #      INCLUDE_SLOW_TESTS=true ./test.sh run_btree_tests
-#      INCLUDE_SLOW_TESTS=true ./test.sh run_tests_with_shared_memory
-#      INCLUDE_SLOW_TESTS=true ./test.sh run_tests_with_shared_memory
+#
+#  Run BTree functional tests w/shared memory configuration:
+#      INCLUDE_SLOW_TESTS=true ./test.sh run_btree_tests --use-shmem
+#
+#  Run slower unit-tests w/default memory configuration:
+#      INCLUDE_SLOW_TESTS=true ./test.sh run_slower_unit_tests
+#
+#  Run slower unit-tests & nightly stress tests w/shared memory configuration:
 #      INCLUDE_SLOW_TESTS=true ./test.sh run_slower_unit_tests --use-shmem
 #      INCLUDE_SLOW_TESTS=true ./test.sh nightly_unit_stress_tests --use-shmem
-# ------------------------------------------------------------------------
-if [ $# -ge 1 ]; then
-
-   # shellcheck disable=SC2048
-   $*
-   record_elapsed_time ${testRunStartSeconds} "All Tests"
-   cat_exec_log_file
-   exit 0
-fi
-
-# ------------------------------------------------------------------------
-# Fast-path execution support. You can invoke this script specifying the
-# name of one of the functions to execute a specific set of tests. If the
-# function takes arguments, pass them on the command-line. This way, one
-# can debug script changes to ensure that test-execution still works.
 #
-# Examples:
-#  INCLUDE_SLOW_TESTS=true ./test.sh run_btree_tests
-#  INCLUDE_SLOW_TESTS=true ./test.sh run_splinter_functionality_tests --use-shmem
+#  Run collection of tests designed to exercise shared memory support:
+#      INCLUDE_SLOW_TESTS=true ./test.sh run_tests_with_shared_memory
 # ------------------------------------------------------------------------
 if [ $# -ge 1 ]; then
 
@@ -1055,6 +1090,7 @@ run_btree_tests ""
 
 run_other_driver_tests ""
 
+record_elapsed_time ${testRunStartSeconds} "Tests without shared memory configured"
 # ------------------------------------------------------------------------
 # Re-run a collection of tests using shared-memory.
 run_tests_with_shared_memory
