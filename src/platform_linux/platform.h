@@ -320,6 +320,7 @@ extern platform_heap_id Heap_id;
  *	hid - Platform heap-ID to allocate memory from.
  *	v   - Structure to allocate memory for.
  *	n   - Number of bytes of memory to allocate.
+ *  mf  - platform_memfrag *, to return memory allocation information.
  * -----------------------------------------------------------------------------
  */
 #define TYPED_MANUAL_MALLOC(hid, v, n, mf)                                     \
@@ -360,6 +361,7 @@ extern platform_heap_id Heap_id;
  *	a   - Alignment needed for allocated memory.
  *	v   - Structure to allocate memory for.
  *	n   - Number of bytes of memory to allocate.
+ *  mf  - platform_memfrag *, to return memory allocation information.
  */
 #define TYPED_ALIGNED_MALLOC_MF(hid, a, v, n, mf)                              \
    ({                                                                          \
@@ -369,7 +371,7 @@ extern platform_heap_id Heap_id;
    })
 
 #define TYPED_ALIGNED_MALLOC(hid, a, v, n)                                     \
-   TYPED_ALIGNED_MALLOC_MF(hid, a, v, n, (platform_memfrag *)NULL)
+   TYPED_ALIGNED_MALLOC_MF(hid, a, v, n, &memfrag_##v)
 
 #define TYPED_ALIGNED_ZALLOC_MF(hid, a, v, n, mf)                              \
    ({                                                                          \
@@ -478,7 +480,7 @@ extern platform_heap_id Heap_id;
  * Parameters:
  *  hid - Platform heap-ID to allocate memory from.
  *  v   - Structure to allocate memory for.
- *  mf  - Addr of memfrag to use for allocation.
+ *  mf  - Addr of memfrag to return memory allocation information.
  */
 #define TYPED_MALLOC_MF(hid, v, mf) TYPED_ARRAY_MALLOC_MF(hid, v, 1, mf)
 
@@ -859,9 +861,6 @@ memfrag_move(platform_memfrag *dst, platform_memfrag *src)
  *
  * - Defenses are built-in to protect callers which may be incorrectly using
  *   this interface to free memory allocated from shared-segment or the heap.
-      _Static_assert((IS_MEM_FRAG(p) || ((hid) == PROCESS_PRIVATE_HEAP_ID)), \
-      _Static_assert((IS_MEM_FRAG(p)),     \
-                     "Incorrect arguments to platform_free()");                \
  * ----------------------------------------------------------------------------
  */
 #define platform_free(hid, p)                                                  \
@@ -884,7 +883,7 @@ memfrag_move(platform_memfrag *dst, platform_memfrag *src)
              *  platform_memfrag memfrag_pivot_key;                            \
              *  key_buffer *pivot_key = TYPED_ARRAY_MALLOC(hid, pivot_key, n); \
              *                                                                 \
-             * and while freeing this memory, calls this interface (in the     \
+             * And while freeing this memory, calls this interface (in the     \
              * conventional way) as:                                           \
              *                                                                 \
              *  platform_free(hid, pivot_key);                                 \
@@ -928,13 +927,11 @@ memfrag_move(platform_memfrag *dst, platform_memfrag *src)
  */
 // clang-format off
 #define platform_free_mem(hid, p, size)                                        \
-        platform_free_frag((hid), (p), (size), STRINGIFY(p));
+        platform_free_frag((hid), (p), (size), STRINGIFY(p))
 
 #define platform_free_frag(hid, p, size, objname)                              \
-   do {                                                                        \
       platform_free_from_heap((hid), (p), (size),                              \
-                              (objname), __func__, __FILE__, __LINE__);        \
-   } while (0)
+                              (objname), __func__, __FILE__, __LINE__)
 
 // clang-format on
 

@@ -537,7 +537,7 @@ task_worker_thread(void *arg)
 
          task_group_run_task(group, task_to_run);
          platform_free_mem(
-            group->ts->heap_id, task_to_run, task_to_run->tmf_size);
+            group->ts->heap_id, task_to_run, task_to_run->mf_size);
 
          rc = task_group_lock(group);
          platform_assert(SUCCESS(rc));
@@ -641,10 +641,10 @@ task_enqueue(task_system *ts,
    if (new_task == NULL) {
       return STATUS_NO_MEMORY;
    }
-   new_task->func     = func;
-   new_task->arg      = arg;
-   new_task->ts       = ts;
-   new_task->tmf_size = memfrag_size(&memfrag_new_task);
+   new_task->func    = func;
+   new_task->arg     = arg;
+   new_task->ts      = ts;
+   new_task->mf_size = memfrag_size(&memfrag_new_task);
 
    task_group     *group = &ts->group[type];
    task_queue     *tq    = &group->tq;
@@ -732,7 +732,7 @@ task_group_perform_one(task_group *group, uint64 queue_scale_percent)
       task_group_run_task(group, assigned_task);
       __sync_fetch_and_sub(&group->current_executing_tasks, 1);
       platform_free_mem(
-         group->ts->heap_id, assigned_task, assigned_task->tmf_size);
+         group->ts->heap_id, assigned_task, assigned_task->mf_size);
    } else {
       rc = STATUS_TIMEDOUT;
    }

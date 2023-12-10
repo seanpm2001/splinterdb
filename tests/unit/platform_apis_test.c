@@ -189,18 +189,14 @@ CTEST2(platform_api, test_platform_condvar_init_destroy)
  * that all combinations work cleanly, w/ and w/o shared memory.
  *
  * - TYPED_MALLOC(), TYPED_ZALLOC() -
- * - TYPED_ALIGNED_MALLOC(), TYPED_ALIGNED_ZALLOC() - Memory allocation is done
- *   the conventional way, directly without the need for an on-stack
- *   platform_memfrag{}.
- *   platform_free() can directly pass the addr of the allocated memory, w/o
- *   the need to supply platform_memfrag *.
+ * - TYPED_ALIGNED_MALLOC(), TYPED_ALIGNED_ZALLOC()
  *
  * - TYPED_ARRAY_MALLOC(), TYPED_ARRAY_ZALLOC()
  *   TYPED_FLEXIBLE_STRUCT_MALLOC(), TYPED_FLEXIBLE_STRUCT_ZALLOC()
  *   These interfaces need an on-stack platform_memfrag{} struct for allocation
  *   and to call the free() interface.
  *
- * For case of test execution with shared memory, do small verification
+ * For case of test execution with shared memory, do a small verification
  * that used / free memory metrics are correct before/after allocation/free.
  * ----------------------------------------------------------------------------
  */
@@ -306,8 +302,7 @@ CTEST2(platform_api, test_TYPED_ARRAY_MALLOC)
    platform_memfrag memfrag_structp;
    any_struct      *structp = TYPED_ARRAY_MALLOC(data->hid, structp, nitems);
 
-   platform_memfrag *mf = &memfrag_structp;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_structp);
    if (data->use_shmem) {
       used_bytes_after_free = platform_shmbytes_used(data->hid);
       free_bytes_after_free = platform_shmbytes_free(data->hid);
@@ -323,6 +318,7 @@ CTEST2(platform_api, test_platform_free_interface)
    any_struct      *structp = TYPED_MALLOC(data->hid, structp);
    platform_free_mem(data->hid, structp, memfrag_size(&memfrag_structp));
 }
+
 /*
  * Dumb test-case to show how -not- to invoke the platform_free() API.
  * If you allocate using platform_memfrag{}, but free the allocated memory
@@ -383,15 +379,13 @@ CTEST2(platform_api, test_TYPED_ARRAY_MALLOC_free_and_MALLOC)
    platform_memfrag memfrag_arrayp;
    any_struct      *arrayp = TYPED_ARRAY_MALLOC(data->hid, arrayp, nitems);
 
-   platform_memfrag *mf = &memfrag_arrayp;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_arrayp);
 
    // If you re-request the same array, memory fragment should be recycled
    platform_memfrag memfrag_new_arrayp;
    any_struct *new_arrayp = TYPED_ARRAY_MALLOC(data->hid, new_arrayp, nitems);
    ASSERT_TRUE(!data->use_shmem || (arrayp == new_arrayp));
-   mf = &memfrag_new_arrayp;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_new_arrayp);
 
    // Allocating a smaller array should also recycle memory fragment.
    // We recycle fragments in sizes of powers-of-2. So, use a new size
@@ -400,8 +394,7 @@ CTEST2(platform_api, test_TYPED_ARRAY_MALLOC_free_and_MALLOC)
    nitems     = 9;
    new_arrayp = TYPED_ARRAY_MALLOC(data->hid, new_arrayp, nitems);
    ASSERT_TRUE(!data->use_shmem || (arrayp == new_arrayp));
-   mf = &memfrag_new_arrayp;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_new_arrayp);
 }
 
 /*
@@ -443,17 +436,13 @@ CTEST2(platform_api, test_alloc_free_multiple_small_frags)
                    memory_allocated);
    }
 
-   platform_memfrag *mf = &memfrag_s1_80b;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_s1_80b);
 
-   mf = &memfrag_s1_40b;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_s1_40b);
 
-   mf = &memfrag_s1_160b;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_s1_160b);
 
-   mf = &memfrag_s1_200b;
-   platform_free(data->hid, mf);
+   platform_free(data->hid, &memfrag_s1_200b);
 
    size_t used_bytes_after_frees = 0;
    size_t free_bytes_after_frees = 0;
@@ -509,10 +498,9 @@ CTEST2(platform_api, test_TYPED_ARRAY_MALLOC_MF)
    size_t old_mem_free =
       (data->use_shmem ? platform_shmbytes_free(data->hid) : 0);
 
-   platform_memfrag  memfrag_structp;
-   any_struct       *structp = TYPED_ARRAY_MALLOC(data->hid, structp, 20);
-   platform_memfrag *mf      = &memfrag_structp;
-   platform_free(data->hid, mf);
+   platform_memfrag memfrag_structp;
+   any_struct      *structp = TYPED_ARRAY_MALLOC(data->hid, structp, 20);
+   platform_free(data->hid, &memfrag_structp);
 
    size_t new_mem_used =
       (data->use_shmem ? platform_shmbytes_used(data->hid) : 0);
@@ -527,10 +515,9 @@ CTEST2(platform_api, test_TYPED_ARRAY_ZALLOC_MF)
    size_t old_mem_used =
       (data->use_shmem ? platform_shmbytes_used(data->hid) : 0);
 
-   platform_memfrag  memfrag_structp;
-   any_struct       *structp = TYPED_ARRAY_ZALLOC(data->hid, structp, 10);
-   platform_memfrag *mf      = &memfrag_structp;
-   platform_free(data->hid, mf);
+   platform_memfrag memfrag_structp;
+   any_struct      *structp = TYPED_ARRAY_ZALLOC(data->hid, structp, 10);
+   platform_free(data->hid, &memfrag_structp);
 
    size_t new_mem_used =
       (data->use_shmem ? platform_shmbytes_used(data->hid) : 0);

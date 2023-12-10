@@ -108,8 +108,7 @@ test_cache_basic(cache *cc, clockcache_config *cfg, platform_heap_id hid)
    uint32 extents_to_allocate = 2 * extent_capacity;
    uint64 pages_to_allocate   = extents_to_allocate * pages_per_extent;
 
-   platform_memfrag *mf = NULL;
-   platform_memfrag  memfrag_addr_arr;
+   platform_memfrag memfrag_addr_arr;
    addr_arr = TYPED_ARRAY_MALLOC(hid, addr_arr, pages_to_allocate);
 
    rc = cache_test_alloc_extents(cc, cfg, addr_arr, extents_to_allocate);
@@ -283,13 +282,11 @@ test_cache_basic(cache *cc, clockcache_config *cfg, platform_heap_id hid)
 
 exit:
    if (addr_arr) {
-      mf = &memfrag_addr_arr;
-      platform_free(hid, mf);
+      platform_free(hid, &memfrag_addr_arr);
    }
 
    if (page_arr) {
-      mf = &memfrag_page_arr;
-      platform_free(hid, mf);
+      platform_free(hid, &memfrag_page_arr);
    }
 
    if (SUCCESS(rc)) {
@@ -489,8 +486,7 @@ test_cache_flush(cache             *cc,
    uint64 pages_to_allocate   = extents_to_allocate * pages_per_extent;
    platform_default_log("Allocate %d extents ... ", extents_to_allocate);
 
-   platform_memfrag *mf = NULL;
-   platform_memfrag  memfrag_addr_arr;
+   platform_memfrag memfrag_addr_arr;
    addr_arr = TYPED_ARRAY_MALLOC(hid, addr_arr, pages_to_allocate);
    t_start  = platform_get_timestamp();
    rc       = cache_test_alloc_extents(cc, cfg, addr_arr, extents_to_allocate);
@@ -566,8 +562,7 @@ test_cache_flush(cache             *cc,
 
 exit:
    if (addr_arr) {
-      mf = &memfrag_addr_arr;
-      platform_free(hid, mf);
+      platform_free(hid, &memfrag_addr_arr);
    }
 
    if (SUCCESS(rc)) {
@@ -846,9 +841,6 @@ test_cache_async(cache             *cc,
    platform_status rc;
    uint32          total_threads = num_reader_threads + num_writer_threads;
 
-   platform_memfrag  memfrag;
-   platform_memfrag *mf;
-
    platform_memfrag memfrag_params;
    test_params     *params =
       TYPED_ARRAY_ZALLOC(hid, params, num_reader_threads + num_writer_threads);
@@ -888,6 +880,7 @@ test_cache_async(cache             *cc,
    cache_flush(cc);
    cache_evict(cc, TRUE);
    cache_reset_stats(cc);
+   platform_memfrag memfrag;
    for (i = 0; i < total_threads; i++) {
       const bool32 is_reader = i < num_reader_threads ? TRUE : FALSE;
 
@@ -947,7 +940,6 @@ test_cache_async(cache             *cc,
       platform_thread_join(params[i].thread);
    }
 
-   mf = &memfrag;
    for (i = 0; i < total_threads; i++) {
       platform_free_mem(hid, params[i].handle_arr, params[i].handle_arr_size);
       params[i].handle_arr = NULL;
@@ -962,11 +954,8 @@ test_cache_async(cache             *cc,
       ref = allocator_dec_ref(al, addr, PAGE_TYPE_MISC);
       platform_assert(ref == AL_FREE);
    }
-   mf = &memfrag_addr_arr;
-   platform_free(hid, mf);
-
-   mf = &memfrag_params;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_addr_arr);
+   platform_free(hid, &memfrag_params);
    cache_print_stats(Platform_default_log_handle, cc);
    platform_default_log("\n");
 

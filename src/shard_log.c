@@ -385,12 +385,12 @@ finished_first_pass:
    itor->contents =
       TYPED_ARRAY_MALLOC_MF(hid, itor->contents, num_contents, &memfrag);
    debug_assert(itor->contents);
-   itor->contents_size = memfrag_size(&memfrag);
+   itor->contents_mf_size = memfrag_size(&memfrag);
 
    itor->entries =
       TYPED_ARRAY_MALLOC_MF(hid, itor->entries, itor->num_entries, &memfrag);
    debug_assert(itor->entries);
-   itor->entries_size = memfrag_size(&memfrag);
+   itor->entries_mf_size = memfrag_size(&memfrag);
 
    // traverse the log extents again and copy the kv pairs
    log_entry *cursor    = (log_entry *)itor->contents;
@@ -439,13 +439,13 @@ finished_second_pass:
 void
 shard_log_iterator_deinit(platform_heap_id hid, shard_log_iterator *itor)
 {
-   platform_free_mem(hid, itor->contents, itor->contents_size);
-   itor->contents      = NULL;
-   itor->contents_size = 0;
+   platform_free_mem(hid, itor->contents, itor->contents_mf_size);
+   itor->contents         = NULL;
+   itor->contents_mf_size = 0;
 
-   platform_free_mem(hid, itor->entries, itor->entries_size);
-   itor->entries      = NULL;
-   itor->entries_size = 0;
+   platform_free_mem(hid, itor->entries, itor->entries_mf_size);
+   itor->entries         = NULL;
+   itor->entries_mf_size = 0;
 }
 
 void

@@ -478,8 +478,7 @@ test_sync_writes(platform_heap_id    hid,
 
    int page_size = (int)io_cfgp->page_size;
 
-   platform_memfrag  memfrag_buf;
-   platform_memfrag *mf = &memfrag_buf;
+   platform_memfrag memfrag_buf;
    // Allocate a buffer to do page I/O
    char *buf = TYPED_ARRAY_ZALLOC(hid, buf, page_size);
    if (!buf) {
@@ -519,7 +518,7 @@ test_sync_writes(platform_heap_id    hid,
    }
 
 free_buf:
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_buf);
 out:
    return rc;
 }
@@ -583,7 +582,6 @@ test_sync_reads(platform_heap_id    hid,
 
    int page_size = (int)io_cfgp->page_size;
 
-   platform_memfrag *mf = NULL;
    // Allocate a buffer to do page I/O, and an expected results buffer
    platform_memfrag memfrag_buf;
    char            *buf = TYPED_ARRAY_ZALLOC(hid, buf, page_size);
@@ -635,11 +633,8 @@ test_sync_reads(platform_heap_id    hid,
    }
 
 free_buf:
-   mf = &memfrag_buf;
-   platform_free(hid, mf);
-
-   mf = &memfrag_exp;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_buf);
+   platform_free(hid, &memfrag_exp);
    return rc;
 }
 
@@ -831,8 +826,6 @@ test_async_reads(platform_heap_id    hid,
 
    int page_size = (int)io_cfgp->page_size;
 
-   platform_memfrag *mf = NULL;
-
    // Allocate a buffer to do page I/O, and an expected results buffer
    uint64           nbytes = (page_size * NUM_PAGES_RW_ASYNC_PER_THREAD);
    platform_memfrag memfrag_buf;
@@ -886,11 +879,9 @@ test_async_reads(platform_heap_id    hid,
 
    io_cleanup(ioh, NUM_PAGES_RW_ASYNC_PER_THREAD);
 
-   mf = &memfrag_exp;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_exp);
 free_buf:
-   mf = &memfrag_buf;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_buf);
 out:
    return rc;
 }

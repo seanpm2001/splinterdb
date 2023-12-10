@@ -290,8 +290,7 @@ CTEST2(splinterdb_quick, test_value_size_gt_max_value_size)
       data->kvsb, slice_create(sizeof("foo"), "foo"), too_large_value);
 
    ASSERT_EQUAL(EINVAL, rc);
-   platform_memfrag *mf = &memfrag_too_large_value_data;
-   platform_free(data->cfg.heap_id, mf);
+   platform_free(data->cfg.heap_id, &memfrag_too_large_value_data);
 }
 
 /*

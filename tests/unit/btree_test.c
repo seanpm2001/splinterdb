@@ -257,8 +257,7 @@ leaf_hdr_tests(btree_config *cfg, btree_scratch *scratch, platform_heap_id hid)
       ASSERT_EQUAL(0, cmp_rv, "Bad 4-byte message %d\n", i);
    }
 
-   platform_memfrag *mf = &memfrag_leaf_buffer;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_leaf_buffer);
    return 0;
 }
 
@@ -300,8 +299,7 @@ leaf_hdr_search_tests(btree_config *cfg, platform_heap_id hid)
       ASSERT_EQUAL(0, cmp_rv, "Bad 4-byte key %d\n", i);
    }
 
-   platform_memfrag *mf = &memfrag_leaf_buffer;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_leaf_buffer);
    return 0;
 }
 
@@ -366,8 +364,7 @@ index_hdr_tests(btree_config *cfg, btree_scratch *scratch, platform_heap_id hid)
 
       ASSERT_EQUAL(childaddr, i, "Bad childaddr %d\n", i);
    }
-   platform_memfrag *mf = &memfrag_index_buffer;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_index_buffer);
    return 0;
 }
 
@@ -405,8 +402,7 @@ index_hdr_search_tests(btree_config *cfg, platform_heap_id hid)
          (i / 2), idx, "Bad pivot search result idx=%ld for i=%d\n", idx, i);
    }
 
-   platform_memfrag *mf = &memfrag_leaf_buffer;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_leaf_buffer);
    return 0;
 }
 
@@ -482,10 +478,7 @@ leaf_split_tests(btree_config    *cfg,
       destroy_leaf_incorporate_spec(&spec);
    }
 
-   platform_memfrag *mf = &memfrag_leaf_buffer;
-   platform_free(hid, mf);
-
-   mf = &memfrag_msg_buffer;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_leaf_buffer);
+   platform_free(hid, &memfrag_msg_buffer);
    return 0;
 }

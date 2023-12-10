@@ -433,9 +433,9 @@ platform_align_bytes_reqd(const size_t alignment, const size_t size)
  * If Splinter is configured to run with shared memory, we will invoke the
  * shmem-allocation function, working off of the (non-NULL) platform_heap_id.
  *
- * Returns ptr to allocated. If 'memfrag' is supplied, return the allocated
- * memory fragment's info (addr & size). This is needed to support 'free' when
- * using shared memory based allocation.
+ * Returns ptr to allocated memory. If 'memfrag' is supplied, return the
+ * allocated memory fragment's info (addr & size). This is needed to support
+ * 'free' when using shared memory based allocation.
  */
 static inline void *
 platform_aligned_malloc(const platform_heap_id heap_id,
@@ -489,7 +489,7 @@ platform_aligned_malloc(const platform_heap_id heap_id,
  * Reallocing from NULL must be equivalent to allocing.
  *
  * Returns ptr to reallocated memory fragment. In case of shared memory,
- *  returns the newsize padded-upto cache-line alignment bytes.
+ *  returns the newsize padded-up to cache-line alignment bytes.
  */
 #define platform_realloc(hid, oldsize, ptr, newsize)                           \
    platform_do_realloc(                                                        \

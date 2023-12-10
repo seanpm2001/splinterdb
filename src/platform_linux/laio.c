@@ -235,7 +235,7 @@ io_handle_init(laio_handle *io, io_config *cfg, platform_heap_id hid)
                    cfg->async_queue_size,
                    cfg->async_max_pages);
 
-   io->req_size = memfrag_size(&memfrag_io_req);
+   io->req_mf_size = memfrag_size(&memfrag_io_req);
 
    // Initialize each Async IO request structure
    for (int i = 0; i < cfg->async_queue_size; i++) {
@@ -275,9 +275,9 @@ io_handle_deinit(laio_handle *io)
    }
    platform_assert(status == 0);
 
-   platform_free_mem(io->heap_id, io->req, io->req_size);
-   io->req      = NULL;
-   io->req_size = 0;
+   platform_free_mem(io->heap_id, io->req, io->req_mf_size);
+   io->req         = NULL;
+   io->req_mf_size = 0;
 }
 
 /*

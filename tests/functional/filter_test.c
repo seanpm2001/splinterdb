@@ -36,9 +36,8 @@ test_filter_basic(cache           *cc,
       return STATUS_BAD_PARAM;
    }
 
-   platform_memfrag *mf = NULL;
-   platform_memfrag  memfrag_fp_arr;
-   uint32          **fp_arr = TYPED_ARRAY_MALLOC(hid, fp_arr, num_values);
+   platform_memfrag memfrag_fp_arr;
+   uint32         **fp_arr = TYPED_ARRAY_MALLOC(hid, fp_arr, num_values);
 
    // Technically, each fp_arr[i] might come from a differently sized
    // memory fragment. So we should really track num_values fragments.
@@ -78,8 +77,7 @@ test_filter_basic(cache           *cc,
       }
    }
 
-   mf = &memfrag_used_keys;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_used_keys);
 
    routing_filter filter[MAX_FILTERS] = {{0}};
    for (uint64 i = 0; i < num_values; i++) {
@@ -103,8 +101,7 @@ test_filter_basic(cache           *cc,
                         num_input_keys[num_values - 1],
                         num_unique);
 
-   mf = &memfrag_num_input_keys;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_num_input_keys);
 
    for (uint64 i = 0; i < num_values; i++) {
       for (uint64 j = 0; j < num_fingerprints; j++) {
@@ -149,15 +146,13 @@ test_filter_basic(cache           *cc,
 out:
    if (fp_arr) {
       // All fingerprints are expected to be of the same size.
-      mf             = &memfrag_fp_arr_i;
-      size_t fp_size = memfrag_size(mf);
+      size_t fp_size = memfrag_size(&memfrag_fp_arr_i);
       for (uint64 i = 0; i < num_values; i++) {
          platform_free_mem(hid, fp_arr[i], fp_size);
          fp_arr[i] = NULL;
       }
    }
-   mf = &memfrag_fp_arr;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_fp_arr);
    return rc;
 }
 
@@ -282,11 +277,8 @@ out:
    for (uint64 i = 0; i < num_trees; i++) {
       routing_filter_zap(cc, &filter[i]);
    }
-   platform_memfrag *mf = &memfrag_fp_arr;
-   platform_free(hid, mf);
-
-   mf = &memfrag_filter;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_fp_arr);
+   platform_free(hid, &memfrag_filter);
    return rc;
 }
 

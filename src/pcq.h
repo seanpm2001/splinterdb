@@ -14,9 +14,9 @@
 
 typedef struct {
    uint32               num_elems;
-   cache_aligned_uint32 tail; // Producers enqueue to here
-   cache_aligned_uint32 head; // Consumer dequeues from here
-   size_t               size; // of memory allocate to this struct
+   cache_aligned_uint32 tail;    // Producers enqueue to here
+   cache_aligned_uint32 head;    // Consumer dequeues from here
+   size_t               mf_size; // of memory fragment allocated for this struct
    void                *elems[];
 } pcq;
 
@@ -33,7 +33,7 @@ pcq_alloc(platform_heap_id hid, size_t num_elems)
    q = TYPED_FLEXIBLE_STRUCT_ZALLOC(hid, q, elems, num_elems);
    if (q != NULL) {
       q->num_elems = num_elems;
-      q->size      = memfrag_size(&memfrag_q);
+      q->mf_size   = memfrag_size(&memfrag_q);
    }
 
    return q;
@@ -68,7 +68,7 @@ pcq_is_full(const pcq *q)
 static inline void
 pcq_free(platform_heap_id hid, pcq **q)
 {
-   platform_free_mem(hid, *q, (*q)->size);
+   platform_free_mem(hid, *q, (*q)->mf_size);
    *q = NULL;
 }
 

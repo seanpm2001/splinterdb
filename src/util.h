@@ -218,9 +218,7 @@ static inline void
 writable_buffer_deinit(writable_buffer *wb)
 {
    if (wb->can_free) {
-      platform_memfrag mf;
-      memfrag_init(&mf, wb->buffer, wb->buffer_capacity);
-      platform_free(wb->heap_id, &mf);
+      platform_free_mem(wb->heap_id, wb->buffer, wb->buffer_capacity);
    }
    wb->buffer          = NULL;
    wb->buffer_capacity = 0;
@@ -332,6 +330,7 @@ fingerprint_start(const fp_hdr *fp)
  * We know to 'init' an array of uint32 items, which is what fingerprint uses.
  *
  * Returns: Start of allocated fingerprint. NULL, if we ran out of memory.
+ * ----------------------------------------------------------------------------
  */
 #define fingerprint_init(fp, hid, num_tuples)                                  \
    fingerprint_do_init((fp), (hid), (num_tuples), __LINE__)
@@ -365,7 +364,8 @@ fingerprint_is_empty(const fp_hdr *fp)
  * ----------------------------------------------------------------------------
  * void = fingerprint_deinit(platform_heap_id hid, fp_hdr *fp)
  *
- * Release the memory allocated for the fingerprint array.
+ * Releases the memory allocated for the fingerprint array.
+ * ----------------------------------------------------------------------------
  */
 #define fingerprint_deinit(hid, fp) fingerprint_do_deinit((hid), (fp), __LINE__)
 

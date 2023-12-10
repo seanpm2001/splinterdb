@@ -5219,7 +5219,7 @@ trunk_compact_bundle(void *arg, void *scratch_buf)
    threadid                  tid;
 
    // We may be enqueueing tasks of this type from several call sites.
-   // code-flow. Fingerprint mgmt is done inside here, so we claim that
+   // Fingerprint mgmt is done inside here, so we claim that
    // the queued task's handle did not have any memory allocated for the
    // fingerprint array. (Otherwise, this might lead to memory leaks.)
    platform_assert(fingerprint_is_empty(&req->breq_fingerprint),
@@ -5278,6 +5278,7 @@ trunk_compact_bundle(void *arg, void *scratch_buf)
          req->bundle_no);
 
       platform_free_mem(spl->heap_id, req, req->mf_size);
+
       if (spl->cfg.use_stats) {
          spl->stats[tid].compactions_aborted_flushed[height]++;
          spl->stats[tid].compaction_time_wasted_ns[height] +=

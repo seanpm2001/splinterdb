@@ -649,8 +649,6 @@ test_functionality(allocator       *al,
    platform_error_log("Functional test started with %d tables\n", num_tables);
    platform_assert(cc != NULL);
 
-   platform_memfrag *mf = NULL;
-
    platform_memfrag memfrag_spl_tables;
    trunk_handle **spl_tables = TYPED_ARRAY_ZALLOC(hid, spl_tables, num_tables);
    platform_assert(spl_tables != NULL);
@@ -869,13 +867,8 @@ cleanup:
    if (async_lookup) {
       async_ctxt_deinit(hid, async_lookup);
    }
-   mf = &memfrag_spl_tables;
-   platform_free(hid, mf);
-
-   mf = &memfrag_splinters;
-   platform_free(hid, mf);
-
-   mf = &memfrag_shadows;
-   platform_free(hid, mf);
+   platform_free(hid, &memfrag_spl_tables);
+   platform_free(hid, &memfrag_splinters);
+   platform_free(hid, &memfrag_shadows);
    return status;
 }
